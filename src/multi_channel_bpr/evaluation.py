@@ -35,33 +35,42 @@ def score_one_plus_random(k, test_inter, user_reps, item_reps, n_random=1000,
         rec (float): mean average recall @ k
         mrr (float): mean reciprocal rank @ k
     """
-    test_inter_red = test_inter[test_inter['rating'] == 5]
-    test_inter_red = test_inter_red[['user', 'item']].values
+    test_inter_red = test_inter[['user', 'item', 'rating']].values
 
     n_hits = 0
     rr_agg = 0
     m = test_inter_red.shape[0]
     n_item = item_reps.shape[0]
+    all_items = np.array(range(n_item))
+    predictions = []
 
     for idx in range(m):
         u = test_inter_red[idx, 0]
         i = test_inter_red[idx, 1]
         user_embed = user_reps[u]['embed']
-        user_items = user_reps[u]['all_items']
         # 1. Randomly select `n_random` unobserved items
-        random_uo_items = np.random.choice(np.setdiff1d(np.arange(n_item), user_items),
-                                           replace=False, size=n_random)
-        user_items = np.array(list(random_uo_items) + [i])
-        user_item_reps = item_reps[user_items]
+        user_item_reps = item_reps[all_items]
         # 2. Predict ratings for test item i and for unobserved items
         user_item_scores = np.dot(user_item_reps, user_embed)
-        user_items = user_items[np.argsort(user_item_scores)[::-1][:k]]
+        scores = np.sort(user_item_scores)[::-1][:k + 10]
+        user_items = all_items[np.argsort(user_item_scores)[::-1][:k]]
+        prediction = all_items[np.argsort(user_item_scores)[::-1][:k + 10]]
         # 3. Get rank p of test item i within rating predictions
         i_idx = np.where(i == user_items)[0]
-        if len(i_idx) != 0:
-            # item i is among Top-N predictions
-            n_hits += 1
-            rr_agg += 1 / (i_idx[0] + 1)
+        if test_inter_red[idx, 2] == 1:
+            predictions.append({'user': u, 'correct': i, 'feedback': 'views', 'predictions': prediction, 'scores': scores})
+        elif test_inter_red[idx, 2] == 2:
+            predictions.append({'user': u, 'correct': i, 'feedback': 'clicks', 'predictions': prediction, 'scores': scores})
+        elif test_inter_red[idx, 2] == 3:
+            predictions.append({'user': u, 'correct': i, 'feedback': 'favorites', 'predictions': prediction, 'scores': scores})
+        elif test_inter_red[idx, 2] == 4:
+            predictions.append({'user': u, 'correct': i, 'feedback': 'orders', 'predictions': prediction, 'scores': scores})
+
+        if test_inter_red[idx, 2] in [2, 3, 4]:
+            if len(i_idx) != 0:
+                # item i is among Top-N predictions
+                n_hits += 1
+                rr_agg += 1 / (i_idx[0] + 1)
 
         if verbose and (idx % (m//10) == 0):
             _logger.info("Evaluating %s/%s", str(idx), str(m))
@@ -70,4 +79,4 @@ def score_one_plus_random(k, test_inter, user_reps, item_reps, n_random=1000,
     rec = n_hits / m
     mrr = rr_agg / m
 
-    return prec, rec, mrr
+    return predictions, prec, rec, mrr

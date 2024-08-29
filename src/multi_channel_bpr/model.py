@@ -98,6 +98,7 @@ class MultiChannelBPR:
                                              self.item_reps[i],
                                              self.item_reps[j],
                                              lr, reg_params)
+
                 self.user_reps[u]['embed'] = user_embed
                 self.item_reps[i] = pos_item_embed
                 self.item_reps[j] = neg_item_embed
@@ -169,6 +170,8 @@ def get_pos_neg_splits(train_inter_df):
         train_inter_neg (:obj:`pd.DataFrame`): training instances (rows)
             where `rating_{user}` < `mean_rating_{user}
     """
+
+    """
     user_mean_ratings = \
         train_inter_df[['user', 'rating']].groupby('user').mean().reset_index()
     user_mean_ratings.rename(columns={'rating': 'mean_rating'},
@@ -179,6 +182,10 @@ def get_pos_neg_splits(train_inter_df):
         train_inter_df['rating'] >= train_inter_df['mean_rating']]
     train_inter_neg = train_inter_df[
         train_inter_df['rating'] < train_inter_df['mean_rating']]
+    """
+    train_inter_pos = train_inter_df
+    train_inter_pos['mean'] = 0
+    train_inter_neg = pd.DataFrame(columns=train_inter_pos.columns)
 
     return train_inter_pos, train_inter_neg
 

@@ -70,7 +70,10 @@ def get_neg_level_dist(weights, level_counts, mode='non-uniform'):
             dist = [0] * len(nominators)
     else:
         n_levels = len(weights)
-        dist = [1 / n_levels] * n_levels
+        if n_levels != 0:
+            dist = [1 / n_levels] * n_levels
+        else:
+            dist = []
 
     if np.abs(np.sum(dist)-1) > 0.00001:
         _logger.warning("Dist sum unequal 1.")
@@ -111,20 +114,17 @@ def load_movielens(path):
         m (int): no. of unique users in the dataset
         n (int): no. of unique items in the dataset
     """
-    ratings = pd.read_csv(os.path.join(path, 'ratings.dat'), sep='::', header=0,
-                          names=['user', 'item', 'rating', 'timestamp'])
-    ratings.drop('timestamp', axis=1, inplace=True)
+    print(os.path.join(path, 'train.parquet'))
+    train_ratings = pd.read_parquet(os.path.join(path, 'train.parquet'))
+    test_ratings = pd.read_parquet(os.path.join(path, 'test.parquet'))
 
-    m = ratings['user'].unique().shape[0]
-    n = ratings['item'].unique().shape[0]
+    m = pd.concat([train_ratings['user'], test_ratings['user']]).unique().shape[0]
+    n = pd.concat([train_ratings['item'], test_ratings['item']]).unique().shape[0]
 
-    # Contiguation of user and item IDs
-    user_rehasher = dict(zip(ratings['user'].unique(), np.arange(m)))
-    item_rehasher = dict(zip(ratings['item'].unique(), np.arange(n)))
-    ratings['user'] = ratings['user'].map(user_rehasher).astype(int)
-    ratings['item'] = ratings['item'].map(item_rehasher)
+    train_ratings['user'] = train_ratings['user'].astype(int)
+    test_ratings['user'] = test_ratings['user'].astype(int)
 
-    return ratings, m, n
+    return train_ratings, test_ratings, m, n
 
 
 def get_channels(inter_df):
