@@ -10,6 +10,7 @@ import logging
 import os
 import pickle
 import sys
+import copy
 
 from sklearn.model_selection import KFold
 
@@ -47,51 +48,60 @@ def main(args):
     _logger.info("Initialize MC-BPR Experiments...")
     train_verbose = True
 
-    ratings, m, n = load_movielens(args.data_path)
-    channels = get_channels(ratings)
+    train_inter, test_inter, m, n = load_movielens(args.data_path)
+    channels = get_channels(train_inter)
 
     reg_params = {'u': args.reg_param_list[0],
-                  'i': args.reg_param_list[0],
-                  'j': args.reg_param_list[0]}
+                  'i': args.reg_param_list[1],
+                  'j': args.reg_param_list[2]}
 
-    kf = KFold(n_splits=args.n_folds, random_state=args.rd_seed, shuffle=True)
-    split_count = 0
     res_dict = {}
 
-    for train_index, test_index in kf.split(ratings):
-        split_count += 1
-        res_dict[split_count] = {}
-        train_inter = ratings.iloc[train_index]
-        test_inter = ratings.iloc[test_index]
+    for neg_sampling_mode in args.neg_sampling_modes:
+        res_dict[neg_sampling_mode] = {}
 
-        for neg_sampling_mode in args.neg_sampling_modes:
-            res_dict[split_count][neg_sampling_mode] = {}
+        for beta in args.beta_list:
+            best_mrr = -1
+            res_dict[neg_sampling_mode][beta] = {}
 
-            for beta in args.beta_list:
-                res_dict[split_count][neg_sampling_mode][beta] = {}
-                _logger.info("Split/Sampling/Beta: {}/{} - {} - {}".format(
-                        split_count, args.n_folds, neg_sampling_mode, beta
-                ))
-
-                model = MultiChannelBPR(d=args.d, beta=beta,
-                                        rd_seed=args.rd_seed,
-                                        channels=channels, n_user=m, n_item=n)
-                model.set_data(train_inter, test_inter)
-                _logger.info("Training ...")
-                model.fit(lr=args.lr, reg_params=reg_params, n_epochs=args.n_epochs,
+            model = MultiChannelBPR(d=args.d, beta=beta,
+                                    rd_seed=args.rd_seed,
+                                    channels=channels, n_user=m, n_item=n)
+            model.set_data(train_inter, test_inter)
+            _logger.info("Training ...")
+            for i in range(args.n_epochs):
+                res_dict[neg_sampling_mode][beta][i] = {}
+                model.fit(lr=args.lr, reg_params=reg_params, n_epochs=1,
                           neg_item_sampling_mode=neg_sampling_mode,
                           verbose=train_verbose)
                 _logger.info("Evaluating ...")
-                prec, rec, mrr = model.evaluate(test_inter, args.k)
+                predictions, prec, rec, mrr = model.evaluate(test_inter, args.k)
+                res_dict[neg_sampling_mode][beta][i]['map'] = prec
+                res_dict[neg_sampling_mode][beta][i]['mar'] = rec
+                res_dict[neg_sampling_mode][beta][i]['mrr'] = mrr
 
-                res_dict[split_count][neg_sampling_mode][beta]['map'] = prec
-                res_dict[split_count][neg_sampling_mode][beta]['mar'] = rec
-                res_dict[split_count][neg_sampling_mode][beta]['mrr'] = mrr
+                if mrr > best_mrr:
+                    best_predictions = copy.deepcopy(predictions)
+                    best_mrr = mrr
+                    best_model = model
+                else:
+                    break
 
-        res_filename = datetime.strftime(datetime.now(), '%Y%m%d_bpr_multi_')
-        res_filename = res_filename + str(split_count) + 'o' + str(args.n_folds) + '.pkl'
-        res_filepath = os.path.join(args.results_path, res_filename)
-        pickle.dump(res_dict[split_count], open(res_filepath, 'wb'))
+    print('finish')
+    os.makedirs(args.results_path, exist_ok=True)
+
+    res_filename = 'result.pkl'
+    res_filepath = os.path.join(args.results_path, res_filename)
+    pickle.dump(res_dict, open(res_filepath, 'wb'))
+
+    predictions_filepath = 'predictions.pkl'
+    predictions_filepath = os.path.join(args.results_path, predictions_filepath)
+    pickle.dump(best_predictions, open(predictions_filepath, 'wb'))
+
+    model_filepath = 'model.pkl'
+    model_filepath = os.path.join(args.results_path, model_filepath)
+    pickle.dump(best_model, open(model_filepath, 'wb'))
+    print('saved')
 
     _logger.info("Experiments finished, results saved in %s", res_filepath)
 
