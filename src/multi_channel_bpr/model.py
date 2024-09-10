@@ -93,6 +93,8 @@ class MultiChannelBPR:
                                  self.pos_level_dist,
                                  self.train_inter_pos_dict,
                                  mode=neg_item_sampling_mode)
+                if j is None:
+                    continue
                 user_embed, pos_item_embed, neg_item_embed = \
                     perform_gradient_descent(self.user_reps[u]['embed'],
                                              self.item_reps[i],

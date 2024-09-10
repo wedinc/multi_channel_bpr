@@ -100,7 +100,11 @@ def get_neg_item(user_rep, N, n, u, i, pos_level_dist, train_inter_pos_dict,
     else:
         if mode == 'uniform':
             # sample item uniformly from unobserved channel
-            j = np.random.choice(np.setdiff1d(np.arange(n), user_rep['items']))
+            unknown_items = np.setdiff1d(np.arange(n), user_rep['items'])
+            if unknown_items.size == 0:
+                j = None
+            else:
+                j = np.random.choice(unknown_items)
 
         elif mode == 'non-uniform':
             # sample item non-uniformly from unobserved channel
